@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - FeedbackBox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Navigation Header -->
+    <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm">
+        <h1 class="text-xl font-bold text-blue-600">FeedbackBox</h1>
+        <div class="flex items-center space-x-4">
+            <span id="welcome-user" class="text-sm font-medium text-gray-700">Welcome</span>
+            <button id="logout-btn" class="text-sm text-red-600 hover:underline font-medium">Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto py-10 px-4">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-2xl font-bold text-gray-800">Your Feedback Boxes</h2>
+            <a href="create-form.html" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 font-medium transition">
+                + Create New Box
+            </a>
+        </div>
+
+        <!-- Dynamic Container for Boxes -->
+        <div id="boxes-container" class="space-y-4">
+            <p class="text-gray-500 text-sm">Loading your feedback boxes...</p>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const currentUser = JSON.parse(localStorage.getItem('user'));
+
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('welcome-user').textContent = `Welcome, ${currentUser.username}`;
+
+            document.getElementById('logout-btn').addEventListener('click', () => {
+                localStorage.removeItem('user');
+                window.location.href = 'login.html';
+            });
+
+            loadUserBoxes(currentUser.id);
+        });
+
+        async function loadUserBoxes(userId) {
+            const container = document.getElementById('boxes-container');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/boxes/user/${userId}`);
+                if (!response.ok) throw new Error('Failed to fetch boxes');
+
+                const boxes = await response.json();
+                container.innerHTML = '';
+
+                if (boxes.length === 0) {
+                    container.innerHTML = `
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-500">
+                            No feedback boxes created yet. Click "+ Create New Box" to start!
+                        </div>
+                    `;
+                    return;
+                }
+
+                for (const box of boxes) {
+                    let count = 0;
+                    try {
+                        const res = await fetch(`${API_BASE_URL}/responses/box/${box.id}`);
+                        if (res.ok) {
+                            const responses = await res.json();
+                            count = responses.length;
+                        }
+                    } catch (e) {
+                        console.error('Count fetch error:', e);
+                    }
+
+                    const publicUrl = `${window.location.origin}${window.location.pathname.replace('dashboard.html', '')}feedback.html?code=${box.code}`;
+
+                    const boxCard = document.createElement('div');
+                    boxCard.className = 'bg-white rounded-xl shadow-sm p-6 border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0';
+
+                    boxCard.innerHTML = `
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">${box.title}</h3>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Code: <span class="font-semibold text-blue-600">${box.code}</span>
+                                <span class="mx-2">•</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    ${count} ${count === 1 ? 'Response' : 'Responses'}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="copyToClipboard('${publicUrl}')" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg font-medium transition">
+                                📋 Copy Link
+                            </button>
+                            <a href="responses.html?boxId=${box.id}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg font-medium transition">
+                                View Responses
+                            </a>
+                            <a href="feedback.html?code=${box.code}" target="_blank" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs rounded-lg font-medium transition">
+                                Public Link ↗
+                            </a>
+                            <button onclick="deleteBox(${box.id}, '${userId}')" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs rounded-lg font-medium transition">
+                                🗑️ Delete
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(boxCard);
+                }
+            } catch (err) {
+                console.error('Error fetching boxes:', err);
+                container.innerHTML = `<p class="text-red-500 text-sm">Could not load feedback boxes. Ensure the backend server is running.</p>`;
+            }
+        }
+
+        function copyToClipboard(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Public link copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+            });
+        }
+
+        async function deleteBox(boxId, userId) {
+            if (!confirm('Are you sure you want to delete this box and all its responses?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/boxes/${boxId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    alert('Feedback box deleted!');
+                    loadUserBoxes(userId);
+                } else {
+                    alert('Failed to delete box.');
+                }
+            } catch (err) {
+                console.error('Delete error:', err);
+                alert('Error connecting to backend server.');
+            }
+        }
+    </script>
+</body>
+</html>
