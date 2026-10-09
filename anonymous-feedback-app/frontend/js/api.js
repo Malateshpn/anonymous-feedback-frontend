@@ -1,1 +1,1 @@
-const API_BASE_URL = 'https://anonymous-feedback-backend-s6ci.onrender.com/api';
+const API_BASE_URL = "https://anonymous-feedback-backend-s5ci.onrender.com";
